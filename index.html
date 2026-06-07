@@ -1,238 +1,174 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>牛顿环测曲率半径-含完整不确定度</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body {
-            font-family: "Microsoft YaHei", sans-serif;
-            max-width: 900px;
-            margin: 20px auto;
-            padding: 0 20px;
-            background-color: #f5f7fa;
-        }
-        h1 {
-            color: #2c3e50;
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .container {
-            background: white;
-            padding: 25px;
-            border-radius: 10px;
-            box-shadow: 0 2px 15px rgba(0,0,0,0.1);
-        }
-        .input-section {
-            margin-bottom: 25px;
-        }
-        label {
-            display: block;
-            margin: 10px 0 5px;
-            color: #34495e;
-            font-weight: bold;
-        }
-        input, textarea, button {
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 14px;
-        }
-        button {
-            background-color: #3498db;
-            color: white;
-            border: none;
-            cursor: pointer;
-            margin: 5px 5px 5px 0;
-            transition: background 0.3s;
-        }
-        button:hover {
-            background-color: #2980b9;
-        }
-        button.secondary {
-            background-color: #95a5a6;
-        }
-        button.secondary:hover {
-            background-color: #7f8c8d;
-        }
-        textarea {
-            width: 100%;
-            height: 120px;
-            resize: vertical;
-            font-family: monospace;
-        }
-        #result {
-            margin-top: 20px;
-            padding: 15px;
-            background-color: #e8f4fd;
-            border-radius: 5px;
-            line-height: 1.8;
-        }
-        .canvas-container {
-            margin-top: 20px;
-            position: relative;
-            height: 400px;
-        }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>交安眼 - 智能交通视觉处理平台</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container">
-        <h1>牛顿环曲率半径测量 & 全自动不确定度评定</h1>
-        <div class="input-section">
-            <label for="lambda">入射光波长 λ (nm)：</label>
-            <input type="number" id="lambda" value="589.3" step="0.1">
-            <p style="font-size:12px;color:#666;">钠黄光默认 589.3 nm</p>
+  <div class="app-shell">
+    <aside class="side">
+      <div class="brand">
+        <div class="brand-mark">JY</div>
+        <div>
+          <h1>交安眼</h1>
+          <p>MCWTT 视觉处理平台</p>
         </div>
-        <div class="input-section">
-            <label for="deltaInst">仪器最大允许误差 (mm)：</label>
-            <input type="number" id="deltaInst" value="0.004" step="0.001">
-            <p style="font-size:12px;color:#666;">读数显微镜常用 0.004mm</p>
+      </div>
+
+      <label class="dropzone" id="dropzone">
+        <input id="fileInput" type="file" accept="image/*">
+        <span class="drop-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 3v10m0-10 4 4m-4-4-4 4M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+        </span>
+        <strong>导入交通图片</strong>
+        <small>支持 JPG / PNG / WebP，本地处理不上传</small>
+      </label>
+
+      <section class="panel">
+        <div class="panel-head">
+          <span>应用场景</span>
         </div>
-        <div class="input-section">
-            <label for="dataInput">实验数据：环级数k 暗环直径d(mm)</label>
-            <textarea id="dataInput" placeholder="每行一组 k d">10 7.02
-11 7.38
-12 7.70
-13 8.00
-14 8.28
-15 8.54
-16 8.80
-17 9.04
-18 9.28
-19 9.50</textarea>
+        <div class="segmented" role="tablist" aria-label="应用场景">
+          <button class="active" data-mode="vehicle">车载预警</button>
+          <button data-mode="flow">流量监控</button>
+          <button data-mode="inspect">道路巡检</button>
         </div>
-        <div class="input-section">
-            <button onclick="runFit()">开始计算+不确定度</button>
-            <button class="secondary" onclick="clearAll()">清空</button>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <span>处理模块</span>
+          <button id="resetModules" class="icon-btn" title="恢复默认">
+            <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/></svg>
+          </button>
         </div>
-        <div id="result"></div>
-        <div class="canvas-container">
-            <canvas id="fitChart"></canvas>
+        <label class="toggle">
+          <input type="checkbox" id="enhanceLight" checked>
+          <span>光照校正</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="frequencyBoost" checked>
+          <span>频域感知增强</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="edgeMap" checked>
+          <span>边缘 / 病害提取</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="overlayBoxes" checked>
+          <span>候选目标框</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="trajectory" checked>
+          <span>轨迹与风险叠加</span>
+        </label>
+      </section>
+
+      <section class="panel compact">
+        <label class="range-label" for="sensitivity">
+          <span>灵敏度</span>
+          <output id="sensValue">62</output>
+        </label>
+        <input id="sensitivity" type="range" min="20" max="95" value="62">
+      </section>
+
+      <div class="actions">
+        <button id="processBtn" class="primary-btn">
+          <svg viewBox="0 0 24 24"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8Z"/></svg>
+          处理图片
+        </button>
+        <button id="exportBtn" class="secondary-btn" disabled>
+          <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg>
+          导出结果
+        </button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Offline Vision Console</p>
+          <h2>智能交通图像分析工作台</h2>
         </div>
-    </div>
+        <div class="status-pill">
+          <span></span>
+          本地离线运行
+        </div>
+      </header>
 
-    <script>
-        let myChart = null;
-        // 最小二乘线性拟合
-        function linearRegression(x, y) {
-            const n = x.length;
-            let sumX=0,sumY=0,sumXY=0,sumX2=0,sumY2=0;
-            for(let i=0;i<n;i++){
-                sumX+=x[i]; sumY+=y[i]; sumXY+=x[i]*y[i]; sumX2+=x[i]*x[i]; sumY2+=y[i]*y[i];
-            }
-            const slope = (n*sumXY - sumX*sumY)/(n*sumX2 - sumX*sumX);
-            const intercept = (sumY - slope*sumX)/n;
-            const r = (n*sumXY-sumX*sumY)/Math.sqrt((n*sumX2-sumX*sumX)*(n*sumY2-sumY*sumY));
-            
-            // 残差
-            let residSum=0;
-            for(let i=0;i<n;i++){
-                residSum += Math.pow(y[i]-(slope*x[i]+intercept),2);
-            }
-            const sigma = Math.sqrt(residSum/(n-2));
-            const sb = sigma / Math.sqrt(n*sumX2 - sumX*sumX);
-            return {slope,intercept,r,sb};
-        }
+      <section class="workspace">
+        <div class="viewer">
+          <div class="viewer-toolbar">
+            <div class="tabs">
+              <button class="active" data-view="result">处理结果</button>
+              <button data-view="source">原始图像</button>
+              <button data-view="split">对比视图</button>
+            </div>
+            <div id="imageMeta" class="image-meta">等待导入图片</div>
+          </div>
+          <div class="canvas-wrap" id="canvasWrap">
+            <canvas id="mainCanvas" width="1280" height="720"></canvas>
+            <div id="emptyState" class="empty-state">
+              <div class="radar"></div>
+              <h3>导入图片开始分析</h3>
+              <p>平台会在本地完成增强、边缘提取、候选框叠加与结果导出。</p>
+            </div>
+          </div>
+        </div>
 
-        function runFit(){
-            const lambda_nm = parseFloat(document.getElementById('lambda').value);
-            const deltaInst = parseFloat(document.getElementById('deltaInst').value);
-            const lambda_mm = lambda_nm * 1e-6;
+        <aside class="inspector">
+          <section class="metric-hero">
+            <span>综合置信度</span>
+            <strong id="confidence">--</strong>
+            <p id="sceneSummary">导入图片后生成场景分析摘要</p>
+          </section>
 
-            const dataStr = document.getElementById('dataInput').value.trim();
-            if(!dataStr){alert('请输入实验数据');return;}
-            const lines = dataStr.split('\n').filter(t=>t.trim());
-            const k=[],d=[];
-            let ok=true;
-            for(let line of lines){
-                let p = line.trim().split(/\s+/);
-                if(p.length!==2){ok=false;break;}
-                let ki=parseFloat(p[0]),di=parseFloat(p[1]);
-                if(isNaN(ki)||isNaN(di)){ok=false;break;}
-                k.push(ki);d.push(di);
-            }
-            if(!ok||k.length<3){alert('数据格式错误或组数太少');return;}
+          <section class="metrics-grid">
+            <div>
+              <span>目标候选</span>
+              <strong id="targetCount">--</strong>
+            </div>
+            <div>
+              <span>边缘密度</span>
+              <strong id="edgeDensity">--</strong>
+            </div>
+            <div>
+              <span>风险等级</span>
+              <strong id="riskLevel">--</strong>
+            </div>
+            <div>
+              <span>处理耗时</span>
+              <strong id="processTime">--</strong>
+            </div>
+          </section>
 
-            // 计算 r²
-            const r = d.map(x=>x/2);
-            const y = r.map(ri=>ri*ri);
-            const x = k;
+          <section class="event-panel">
+            <div class="panel-head">
+              <span>事件输出</span>
+            </div>
+            <ol id="eventList">
+              <li>等待图片输入</li>
+            </ol>
+          </section>
 
-            const fit = linearRegression(x,y);
-            const b = fit.slope;
-            const sb = fit.sb;
-            const rCorr = fit.r;
+          <section class="tech-panel">
+            <div class="panel-head">
+              <span>技术映射</span>
+            </div>
+            <ul>
+              <li>静态模板：导入图像作为初始观测</li>
+              <li>动态模板：高置信区域用于轨迹叠加</li>
+              <li>频域思路：高频细节增强与噪声抑制</li>
+              <li>输出层：目标框、置信度、轨迹与告警</li>
+            </ul>
+          </section>
+        </aside>
+      </section>
+    </main>
+  </div>
 
-            // 曲率半径
-            const R_mm = b / lambda_mm;
-            // A类不确定度 由斜率传递
-            const uA_R = sb / lambda_mm;
-            // B类不确定度 仪器误差均匀分布
-            const uB = deltaInst / Math.sqrt(3);
-            // 合成标准不确定度 简化合成
-            const uC_R = Math.sqrt(uA_R*uA_R + uB*uB);
-            // 扩展不确定度 取包含因子k=2
-            const U_R = 2 * uC_R;
-
-            const R_m = R_mm / 1000;
-            const U_m = U_R / 1000;
-
-            // 输出全部结果
-            document.getElementById('result').innerHTML = `
-            <strong>📊 拟合与不确定度完整结果</strong><br>
-            波长 λ = ${lambda_nm.toFixed(1)} nm<br>
-            拟合方程：r² = ${b.toFixed(4)}k + ${fit.intercept.toFixed(4)}<br>
-            相关系数 r = ${rCorr.toFixed(6)}<br>
-            斜率标准不确定度 u(b) = ${sb.toFixed(6)} mm²<br>
-            <hr>
-            曲率半径 R = ${R_mm.toFixed(2)} mm = ${R_m.toFixed(3)} m<br>
-            A类不确定度 u_A = ${uA_R.toFixed(3)} mm<br>
-            B类不确定度 u_B = ${uB.toFixed(3)} mm<br>
-            合成标准不确定度 u_C = ${uC_R.toFixed(3)} mm<br>
-            扩展不确定度 U = ${U_R.toFixed(3)} mm<br>
-            <hr>
-            最终结果：<strong>R = (${R_m.toFixed(3)} ± ${U_m.toFixed(3)}) m</strong>  (k=2)
-            `;
-
-            // 绘图
-            const ctx = document.getElementById('fitChart').getContext('2d');
-            if(myChart) myChart.destroy();
-            const fitY = x.map(xi=>b*xi+fit.intercept);
-            myChart = new Chart(ctx,{
-                type:'scatter',
-                data:{
-                    datasets:[
-                        {
-                            label:'实验数据(k, r²)',
-                            data:x.map((xi,i)=>({x:xi,y:y[i]})),
-                            backgroundColor:'#e74c3c',pointRadius:6
-                        },
-                        {
-                            label:'拟合直线',
-                            type:'line',
-                            data:x.map((xi,i)=>({x:xi,y:fitY[i]})),
-                            borderColor:'#3498db',borderWidth:2,fill:false,pointRadius:0
-                        }
-                    ]
-                },
-                options:{
-                    responsive:true,maintainAspectRatio:false,
-                    scales:{
-                        x:{title:{display:true,text:'环级数 k'}},
-                        y:{title:{display:true,text:'r² (mm²)'}}
-                    }
-                }
-            });
-        }
-
-        function clearAll(){
-            document.getElementById('dataInput').value='';
-            document.getElementById('lambda').value=589.3;
-            document.getElementById('deltaInst').value=0.004;
-            document.getElementById('result').innerHTML='';
-            if(myChart){myChart.destroy();myChart=null;}
-        }
-    </script>
+  <script src="app.js"></script>
 </body>
 </html>
