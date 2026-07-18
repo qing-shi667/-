@@ -6,9 +6,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-chi-sim \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY zeabur-backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py .
+COPY zeabur-backend/app.py .
 
 CMD ["python", "app.py"]
