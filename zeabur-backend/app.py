@@ -12,6 +12,47 @@ from urllib import request
 from urllib.parse import urlparse
 
 
+class RequestBodyError(ValueError):
+    def __init__(self, message: str, status: int) -> None:
+        super().__init__(message)
+        self.status = status
+
+
+def parse_allowed_origins(value: str) -> set[str]:
+    return {
+        origin.strip().rstrip("/")
+        for origin in value.split(",")
+        if origin.strip()
+    }
+
+
+def cors_origin_for(
+    request_origin: str | None,
+    allowed_origins: set[str] | None = None,
+) -> str | None:
+    if not request_origin:
+        return None
+    origin = request_origin.strip().rstrip("/")
+    allowed = ALLOWED_ORIGINS if allowed_origins is None else allowed_origins
+    if "*" in allowed:
+        return "*"
+    return origin if origin in allowed else None
+
+
+def validate_content_length(value: str | None, max_bytes: int) -> int:
+    if value is None:
+        raise RequestBodyError("Content-Length header is required", 411)
+    try:
+        length = int(value)
+    except (TypeError, ValueError) as exc:
+        raise RequestBodyError("Invalid Content-Length header", 400) from exc
+    if length <= 0:
+        raise RequestBodyError("Content-Length must be positive", 400)
+    if length > max_bytes:
+        raise RequestBodyError("Request body is too large", 413)
+    return length
+
+
 HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "8080"))
 DEEPSEEK_API_URL = os.environ.get(
@@ -19,7 +60,7 @@ DEEPSEEK_API_URL = os.environ.get(
     "https://api.deepseek.com/chat/completions",
 )
 DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash")
-ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
+ALLOWED_ORIGINS = parse_allowed_origins(os.environ.get("ALLOWED_ORIGIN", ""))
 ARK_API_URL = os.environ.get(
     "ARK_API_URL",
     "https://ark.cn-beijing.volces.com/api/v3/responses",
@@ -29,6 +70,9 @@ ARK_VISION_MODEL = os.environ.get(
     "doubao-seed-2-0-pro-260215",
 )
 MAX_IMAGE_BYTES = int(os.environ.get("MAX_IMAGE_BYTES", str(12 * 1024 * 1024)))
+MAX_REQUEST_BYTES = int(
+    os.environ.get("MAX_REQUEST_BYTES", str(MAX_IMAGE_BYTES + 1024 * 1024))
+)
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 APP_ROOT = Path(__file__).resolve().parent
@@ -340,7 +384,10 @@ class Handler(BaseHTTPRequestHandler):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Access-Control-Allow-Origin", ALLOWED_ORIGIN)
+        allowed_origin = cors_origin_for(self.headers.get("Origin"))
+        if allowed_origin:
+            self.send_header("Access-Control-Allow-Origin", allowed_origin)
+            self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Content-Length", str(len(body)))
@@ -360,8 +407,22 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_OPTIONS(self) -> None:
+        request_origin = self.headers.get("Origin")
+        allowed_origin = cors_origin_for(request_origin)
+        if request_origin and not allowed_origin:
+            self.send_json(
+                {
+                    "ok": False,
+                    "error": "origin_not_allowed",
+                    "message": "Origin is not allowed",
+                },
+                403,
+            )
+            return
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", ALLOWED_ORIGIN)
+        if allowed_origin:
+            self.send_header("Access-Control-Allow-Origin", allowed_origin)
+            self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
@@ -380,8 +441,17 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         path = urlparse(self.path).path
         try:
-            length = int(self.headers.get("Content-Length", "0"))
+            length = validate_content_length(
+                self.headers.get("Content-Length"),
+                MAX_REQUEST_BYTES,
+            )
             body = self.rfile.read(length)
+            if len(body) != length:
+                raise RequestBodyError("Request body ended before Content-Length", 400)
+        except RequestBodyError as exc:
+            error = "request_too_large" if exc.status == 413 else "bad_request"
+            self.send_json({"ok": False, "error": error, "message": str(exc)}, exc.status)
+            return
         except Exception as exc:
             self.send_json({"ok": False, "error": "bad_request", "message": str(exc)}, 400)
             return
