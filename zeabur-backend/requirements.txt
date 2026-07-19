@@ -1,2 +1,1 @@
-Pillow==10.4.0
-pytesseract==0.3.13
+# The production service uses only the Python standard library.

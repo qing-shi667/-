@@ -5,7 +5,6 @@ import json
 import math
 import os
 import re
-import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -21,7 +20,6 @@ DEEPSEEK_API_URL = os.environ.get(
 )
 DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash")
 ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
-OCR_LANG = os.environ.get("OCR_LANG", "eng+chi_sim")
 ARK_API_URL = os.environ.get(
     "ARK_API_URL",
     "https://ark.cn-beijing.volces.com/api/v3/responses",
@@ -32,6 +30,22 @@ ARK_VISION_MODEL = os.environ.get(
 )
 MAX_IMAGE_BYTES = int(os.environ.get("MAX_IMAGE_BYTES", str(12 * 1024 * 1024)))
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
+APP_ROOT = Path(__file__).resolve().parent
+if not (APP_ROOT / "index.html").exists() and (APP_ROOT.parent / "index.html").exists():
+    APP_ROOT = APP_ROOT.parent
+STATIC_FILES = {
+    "/": (APP_ROOT / "index.html", "text/html; charset=utf-8"),
+    "/index.html": (APP_ROOT / "index.html", "text/html; charset=utf-8"),
+    "/calculator-original.html": (
+        APP_ROOT / "calculator-original.html",
+        "text/html; charset=utf-8",
+    ),
+    "/assets/chart.umd.min.js": (
+        APP_ROOT / "assets" / "chart.umd.min.js",
+        "text/javascript; charset=utf-8",
+    ),
+}
 
 VISION_PROMPT = """读取牛顿环实验数据表，只提取环级数 k 和暗环直径 d(mm)。
 只输出 JSON：{"rows":[{"k":10,"d":7.02}],"warnings":[]}。
@@ -352,6 +366,11 @@ def run_ocr(image_bytes: bytes) -> dict[str, Any]:
     return normalize_ocr_data(text)
 
 
+# These names are intentionally unavailable after the legacy OCR route was removed.
+del normalize_ocr_data
+del run_ocr
+
+
 def extract_multipart_file(body: bytes, content_type: str) -> tuple[bytes, str]:
     match = re.search(r"boundary=([^;]+)", content_type)
     if not match:
@@ -392,6 +411,18 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_static(self, path: Path, content_type: str) -> None:
+        try:
+            body = path.read_bytes()
+        except OSError:
+            self.send_error(404)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_OPTIONS(self) -> None:
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", ALLOWED_ORIGIN)
@@ -400,8 +431,13 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self) -> None:
-        if urlparse(self.path).path == "/api/health":
+        path = urlparse(self.path).path
+        if path == "/api/health":
             self.send_json({"ok": True, "service": "newton-ring-zeabur-ai"})
+            return
+        static_file = STATIC_FILES.get(path)
+        if static_file:
+            self.send_static(*static_file)
             return
         self.send_error(404)
 
