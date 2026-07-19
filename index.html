@@ -37,7 +37,7 @@
 
     .assistant {
       display: grid;
-      grid-template-rows: auto auto auto auto auto;
+      grid-template-rows: auto auto auto auto;
       gap: 12px;
       padding: 18px;
       border: 1px solid #d9e1ec;
@@ -82,11 +82,6 @@
 
     button.secondary:hover {
       background: #f1f5f9;
-    }
-
-    button.compact {
-      padding: 8px 10px;
-      font-size: 13px;
     }
 
     button:disabled {
@@ -150,22 +145,6 @@
       gap: 8px;
     }
 
-    .ocr-row {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 8px;
-    }
-
-    .ocr-row input {
-      width: 100%;
-      padding: 8px;
-      border: 1px solid #d8dee8;
-      border-radius: 5px;
-      font: inherit;
-      font-size: 13px;
-      background: #ffffff;
-    }
-
     @media (max-width: 1050px) {
       .app {
         grid-template-columns: 1fr;
@@ -177,10 +156,6 @@
 
       .chat-log {
         height: 240px;
-      }
-
-      .ocr-row {
-        grid-template-columns: 1fr;
       }
 
     }
@@ -202,10 +177,6 @@
         <button class="secondary" type="button" data-question="这组数据的主要误差来源有哪些？">误差分析</button>
         <button class="secondary" type="button" data-question="实验报告中最终结果应该怎么写？">报告写法</button>
       </div>
-      <div class="ocr-row">
-        <input id="ocrImageInput" type="file" accept="image/*">
-        <button class="secondary compact" id="ocrButton" type="button">OCR识别并计算</button>
-      </div>
       <div class="chat-log" id="chatLog">
         <div class="bubble assistant">你好，我会结合左侧原版计算页里的数据和结果回答牛顿环曲率半径实验问题。</div>
       </div>
@@ -222,14 +193,12 @@
     const calculatorFrame = document.getElementById("calculatorFrame");
     const chatLog = document.getElementById("chatLog");
     const questionInput = document.getElementById("questionInput");
-    const ocrImageInput = document.getElementById("ocrImageInput");
-    const ocrButton = document.getElementById("ocrButton");
     const sendButton = document.getElementById("sendButton");
     const AI_BACKEND_URL = "https://xn--11x61a012f.zeabur.app/api/chat";
     const OCR_BACKEND_URL = AI_BACKEND_URL.replace(/\/api\/chat$/, "/api/ocr");
 
     sendButton.addEventListener("click", sendQuestion);
-    ocrButton.addEventListener("click", runOcr);
+    calculatorFrame.addEventListener("load", setupCalculatorOcr);
     document.getElementById("clearChatButton").addEventListener("click", () => {
       chatHistory.length = 0;
       chatLog.innerHTML = '<div class="bubble assistant">对话已清空。你可以继续提问。</div>';
@@ -264,20 +233,45 @@
     function fillCalculatorData(dataText) {
       const doc = calculatorFrame.contentDocument;
       const input = doc?.getElementById("dataInput");
-      if (!input) throw new Error("没有找到左侧原版计算页的数据输入框。");
+      if (!input) throw new Error("没有找到左侧计算页的数据输入框。");
       input.value = dataText;
-      if (typeof calculatorFrame.contentWindow?.runFit === "function") {
-        calculatorFrame.contentWindow.runFit();
-      }
+      const InputEvent = calculatorFrame.contentWindow?.Event || Event;
+      input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    }
+
+    function getCalculatorOcrControls() {
+      const doc = calculatorFrame.contentDocument;
+      return {
+        imageInput: doc?.getElementById("ocrImageInput"),
+        button: doc?.getElementById("ocrButton"),
+        status: doc?.getElementById("ocrStatus"),
+      };
+    }
+
+    function setOcrStatus(status, message, state = "") {
+      if (!status) return;
+      status.textContent = message;
+      status.className = `ocr-status${state ? ` ${state}` : ""}`;
+    }
+
+    function setupCalculatorOcr() {
+      const { button } = getCalculatorOcrControls();
+      if (!button || button.dataset.ocrBound === "true") return;
+      button.dataset.ocrBound = "true";
+      button.addEventListener("click", runOcr);
     }
 
     async function runOcr() {
-      const file = ocrImageInput.files?.[0];
-      if (!file || ocrButton.disabled) return;
-      ocrButton.disabled = true;
+      const { imageInput, button, status } = getCalculatorOcrControls();
+      const file = imageInput?.files?.[0];
+      if (!button || button.disabled) return;
+      if (!file) {
+        setOcrStatus(status, "请先选择一张实验数据图片。", "error");
+        return;
+      }
+      button.disabled = true;
       try {
-        appendMessage("assistant", "正在识别图片并整理实验数据...");
-        const loadingBubble = chatLog.lastElementChild;
+        setOcrStatus(status, "正在识别图片并由 AI 整理实验数据...");
         const formData = new FormData();
         formData.append("image", file);
         const response = await fetch(OCR_BACKEND_URL, {
@@ -289,14 +283,12 @@
           throw new Error(data.message || "OCR 识别失败");
         }
         fillCalculatorData(data.data_text);
-        loadingBubble.textContent = `OCR 已整理出可计算数据，并已自动填入左侧计算页：\n${data.data_text}`;
+        const rowCount = data.data_text.split(/\r?\n/).filter((line) => line.trim()).length;
+        setOcrStatus(status, `已识别并填入 ${rowCount} 组数据，请核对后手动开始计算。`, "success");
       } catch (error) {
-        if (chatLog.lastElementChild?.textContent === "正在识别图片并整理实验数据...") {
-          chatLog.lastElementChild.remove();
-        }
-        appendMessage("assistant error", error.message);
+        setOcrStatus(status, error.message, "error");
       } finally {
-        ocrButton.disabled = false;
+        button.disabled = false;
       }
     }
 
