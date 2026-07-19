@@ -390,7 +390,9 @@ def extract_multipart_file(body: bytes, content_type: str) -> tuple[bytes, str]:
             else "application/octet-stream"
         )
         file_bytes = part[header_end + 4 :]
-        return file_bytes.rstrip(b"\r\n-"), mime_type
+        if file_bytes.endswith(b"\r\n"):
+            file_bytes = file_bytes[:-2]
+        return file_bytes, mime_type
     raise ValueError("没有找到上传图片。")
 
 
