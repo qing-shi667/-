@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>牛顿环曲率半径计算与AI回答助手</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: #243142;
+      background: #eef3f8;
+      font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    }
+
+    .mobile-tabs {
+      display: none;
+    }
+
+    .app {
+      width: min(1420px, calc(100vw - 28px));
+      margin: 14px auto;
+      display: grid;
+      grid-template-columns: minmax(640px, 1fr) 390px;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .calculator-frame {
+      width: 100%;
+      height: calc(100vh - 28px);
+      min-height: 880px;
+      border: 0;
+      border-radius: 8px;
+      background: #f5f7fa;
+      box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .assistant {
+      display: grid;
+      grid-template-rows: auto auto 280px auto auto;
+      gap: 12px;
+      padding: 18px;
+      border: 1px solid #d9e1ec;
+      border-radius: 8px;
+      background: #ffffff;
+      box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      margin: 0;
+      color: #2c3e50;
+      font-size: 22px;
+      line-height: 1.35;
+    }
+
+    .quick {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    button {
+      padding: 10px 12px;
+      border: 0;
+      border-radius: 5px;
+      color: #ffffff;
+      background: #3498db;
+      font: inherit;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      background: #2980b9;
+    }
+
+    button.secondary {
+      color: #34495e;
+      border: 1px solid #d8dee8;
+      background: #ffffff;
+    }
+
+    button.secondary:hover {
+      background: #f1f5f9;
+    }
+
+    button:disabled {
+      opacity: 0.65;
+      cursor: wait;
+    }
+
+    .chat-log {
+      height: 280px;
+      overflow: auto;
+      display: grid;
+      align-content: start;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid #d8dee8;
+      border-radius: 8px;
+      background: #f8fbfe;
+    }
+
+    .bubble {
+      max-width: 94%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .bubble.user {
+      justify-self: end;
+      color: #ffffff;
+      background: #3498db;
+    }
+
+    .bubble.assistant {
+      justify-self: start;
+      border: 1px solid #d8dee8;
+      background: #ffffff;
+    }
+
+    .bubble.error {
+      color: #a8261f;
+      border-color: #f0b5ae;
+      background: #fff7f6;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 110px;
+      resize: vertical;
+      padding: 10px;
+      border: 1px solid #d8dee8;
+      border-radius: 5px;
+      font: inherit;
+      line-height: 1.55;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    @media (max-width: 1050px) {
+      body {
+        overflow: hidden;
+      }
+
+      .mobile-tabs {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        width: 100%;
+        height: 52px;
+        padding: 6px;
+        border-bottom: 1px solid #d8e1ea;
+        background: #ffffff;
+      }
+
+      .mobile-tab {
+        border-radius: 4px;
+        color: #34495e;
+        background: transparent;
+      }
+
+      .mobile-tab:hover {
+        background: #eef4f8;
+      }
+
+      .mobile-tab.active {
+        color: #ffffff;
+        background: #3498db;
+      }
+
+      .app {
+        display: block;
+        width: 100%;
+        height: calc(100dvh - 52px);
+        margin: 0;
+      }
+
+      .calculator-frame,
+      .assistant {
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        border-radius: 0;
+      }
+
+      .assistant {
+        grid-template-rows: auto auto minmax(180px, 1fr) auto auto;
+        overflow: auto;
+        padding: 14px;
+      }
+
+      .chat-log {
+        height: auto;
+        min-height: 180px;
+      }
+
+      .app[data-mobile-view="calculator"] .assistant {
+        display: none;
+      }
+
+      .app[data-mobile-view="assistant"] .calculator-frame {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="mobile-tabs" role="tablist" aria-label="功能导航">
+    <button class="mobile-tab active" role="tab" aria-selected="true" data-view="calculator" type="button">测量计算</button>
+    <button class="mobile-tab" role="tab" aria-selected="false" data-view="assistant" type="button">AI助手</button>
+  </nav>
+
+  <main class="app" id="app" data-mobile-view="calculator">
+    <iframe
+      id="calculatorFrame"
+      class="calculator-frame"
+      src="calculator-original.html"
+      title="牛顿环曲率半径原版计算页"
+    ></iframe>
+
+    <section class="assistant" aria-label="AI回答助手">
+      <h1>AI回答助手</h1>
+      <div class="quick">
+        <button class="secondary" type="button" data-question="牛顿环为什么可以测量透镜曲率半径？">实验原理</button>
+        <button class="secondary" type="button" data-question="这组数据的主要误差来源有哪些？">误差分析</button>
+        <button class="secondary" type="button" data-question="实验报告中最终结果应该怎么写？">报告写法</button>
+      </div>
+      <div class="chat-log" id="chatLog">
+        <div class="bubble assistant">你好，我会结合左侧原版计算页里的数据和结果回答牛顿环曲率半径实验问题。</div>
+      </div>
+      <textarea id="questionInput" placeholder="例如：为什么要拟合 r² 和环序数 k？"></textarea>
+      <div class="actions">
+        <button id="sendButton" type="button">发送问题</button>
+        <button class="secondary" id="clearChatButton" type="button">清空对话</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const chatHistory = [];
+    const app = document.getElementById("app");
+    const calculatorFrame = document.getElementById("calculatorFrame");
+    const chatLog = document.getElementById("chatLog");
+    const questionInput = document.getElementById("questionInput");
+    const sendButton = document.getElementById("sendButton");
+    const API_BASE_URL = location.hostname.endsWith("github.io")
+      ? "https://xn--11x61a012f.zeabur.app"
+      : "";
+    const AI_BACKEND_URL = `${API_BASE_URL}/api/chat`;
+    const VISION_BACKEND_URL = `${API_BASE_URL}/api/vision-data`;
+    let selectedImageFile = null;
+    let selectedImageUrl = "";
+
+    sendButton.addEventListener("click", sendQuestion);
+    calculatorFrame.addEventListener("load", setupVisionImport);
+    if (calculatorFrame.contentDocument?.readyState === "complete") {
+      setupVisionImport();
+    }
+    document.getElementById("clearChatButton").addEventListener("click", () => {
+      chatHistory.length = 0;
+      chatLog.innerHTML = '<div class="bubble assistant">对话已清空。你可以继续提问。</div>';
+    });
+    document.querySelectorAll("[data-question]").forEach((button) => {
+      button.addEventListener("click", () => {
+        questionInput.value = button.dataset.question;
+        sendQuestion();
+      });
+    });
+    questionInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+        sendQuestion();
+      }
+    });
+    document.querySelectorAll(".mobile-tab").forEach((tab) => {
+      tab.addEventListener("click", () => switchMobileView(tab.dataset.view));
+    });
+
+    function switchMobileView(view) {
+      if (!['calculator', 'assistant'].includes(view)) return;
+      app.dataset.mobileView = view;
+      document.querySelectorAll('.mobile-tab').forEach((tab) => {
+        const active = tab.dataset.view === view;
+        tab.classList.toggle('active', active);
+        tab.setAttribute('aria-selected', String(active));
+      });
+    }
+
+    function collectCalculatorContext() {
+      try {
+        const doc = calculatorFrame.contentDocument;
+        if (!doc) return null;
+        return {
+          lambda_nm: doc.getElementById("lambda")?.value || "",
+          delta_inst_mm: doc.getElementById("deltaInst")?.value || "",
+          data_text: doc.getElementById("dataInput")?.value || "",
+          result_text: doc.getElementById("result")?.innerText || "",
+        };
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function fillCalculatorData(dataText) {
+      const doc = calculatorFrame.contentDocument;
+      const input = doc?.getElementById("dataInput");
+      if (!input) throw new Error("没有找到左侧计算页的数据输入框。");
+      input.value = dataText;
+      const InputEvent = calculatorFrame.contentWindow?.Event || Event;
+      input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    }
+
+    function getVisionControls() {
+      const doc = calculatorFrame.contentDocument;
+      return {
+        cameraInput: doc?.getElementById("cameraInput"),
+        imageFileInput: doc?.getElementById("imageFileInput"),
+        preview: doc?.getElementById("imagePreview"),
+        previewWrap: doc?.getElementById("imagePreviewWrap"),
+        fileName: doc?.getElementById("imageFileName"),
+        visionButton: doc?.getElementById("visionButton"),
+        status: doc?.getElementById("visionStatus"),
+      };
+    }
+
+    function setVisionStatus(status, message, state = "") {
+      if (!status) return;
+      status.textContent = message;
+      status.className = `vision-status${state ? ` ${state}` : ""}`;
+    }
+
+    function selectVisionImage(file) {
+      const { preview, previewWrap, fileName, visionButton, status } = getVisionControls();
+      if (!file || !preview || !previewWrap || !fileName || !visionButton) return;
+      selectedImageFile = file;
+      if (selectedImageUrl) URL.revokeObjectURL(selectedImageUrl);
+      selectedImageUrl = URL.createObjectURL(file);
+      preview.src = selectedImageUrl;
+      fileName.textContent = file.name || "现场拍摄照片";
+      previewWrap.hidden = false;
+      visionButton.disabled = false;
+      setVisionStatus(status, "图片已准备，可以开始 AI 识别。");
+    }
+
+    function setupVisionImport() {
+      const controls = getVisionControls();
+      if (!controls.visionButton || controls.visionButton.dataset.bound === "true") return;
+      controls.visionButton.dataset.bound = "true";
+      controls.cameraInput?.addEventListener("change", () => {
+        selectVisionImage(controls.cameraInput.files?.[0]);
+      });
+      controls.imageFileInput?.addEventListener("change", () => {
+        selectVisionImage(controls.imageFileInput.files?.[0]);
+      });
+      controls.visionButton.addEventListener("click", runVision);
+    }
+
+    async function runVision() {
+      const { visionButton, status } = getVisionControls();
+      if (!selectedImageFile || !visionButton || visionButton.disabled) return;
+      visionButton.disabled = true;
+      try {
+        setVisionStatus(status, "正在由豆包视觉模型读取实验数据...");
+        const formData = new FormData();
+        formData.append("image", selectedImageFile);
+        const response = await fetch(VISION_BACKEND_URL, {
+          method: "POST",
+          body: formData,
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.message || "AI 图片识别失败");
+        }
+        fillCalculatorData(data.data_text);
+        setVisionStatus(
+          status,
+          `已填入 ${data.rows.length} 组数据，请核对后手动计算。`,
+          "success"
+        );
+      } catch (error) {
+        setVisionStatus(status, error.message, "error");
+      } finally {
+        visionButton.disabled = false;
+      }
+    }
+
+    async function sendQuestion() {
+      const question = questionInput.value.trim();
+      if (!question || sendButton.disabled) return;
+      questionInput.value = "";
+      appendMessage("user", question);
+      chatHistory.push({ role: "user", content: question });
+      sendButton.disabled = true;
+      try {
+        appendMessage("assistant", "正在思考...");
+        const loadingBubble = chatLog.lastElementChild;
+        const calculation = collectCalculatorContext();
+        const messages = [
+          {
+            role: "system",
+            content: "你是牛顿环测透镜曲率半径实验的中文教学助手。回答要准确、简洁，优先解释实验原理、数据处理、误差来源和报告写法。"
+          }
+        ];
+        if (calculation) {
+          messages.push({
+            role: "system",
+            content: "当前网页计算上下文：" + JSON.stringify(calculation).slice(0, 3500)
+          });
+        }
+        chatHistory.slice(-6).forEach((item) => messages.push(item));
+        const response = await fetch(AI_BACKEND_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            question,
+            calculation,
+            history: chatHistory,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.message || "AI 后端请求失败");
+        }
+        const answer = data.answer || "";
+        if (!answer) throw new Error("DeepSeek 没有返回有效回答。");
+        loadingBubble.textContent = answer;
+        chatHistory.push({ role: "assistant", content: answer });
+      } catch (error) {
+        if (chatLog.lastElementChild?.textContent === "正在思考...") {
+          chatLog.lastElementChild.remove();
+        }
+        appendMessage("assistant error", error.message);
+      } finally {
+        sendButton.disabled = false;
+      }
+    }
+
+    function appendMessage(type, text) {
+      const bubble = document.createElement("div");
+      bubble.className = `bubble ${type}`;
+      bubble.textContent = text;
+      chatLog.appendChild(bubble);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+  </script>
+</body>
+</html>
