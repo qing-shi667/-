@@ -16,6 +16,10 @@
       font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
     }
 
+    .mobile-tabs {
+      display: none;
+    }
+
     .app {
       width: min(1420px, calc(100vw - 28px));
       margin: 14px auto;
@@ -37,7 +41,7 @@
 
     .assistant {
       display: grid;
-      grid-template-rows: auto auto auto auto;
+      grid-template-rows: auto auto 280px auto auto;
       gap: 12px;
       padding: 18px;
       border: 1px solid #d9e1ec;
@@ -146,23 +150,81 @@
     }
 
     @media (max-width: 1050px) {
-      .app {
-        grid-template-columns: 1fr;
+      body {
+        overflow: hidden;
       }
 
-      .calculator-frame {
-        height: 900px;
+      .mobile-tabs {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        width: 100%;
+        height: 52px;
+        padding: 6px;
+        border-bottom: 1px solid #d8e1ea;
+        background: #ffffff;
+      }
+
+      .mobile-tab {
+        border-radius: 4px;
+        color: #34495e;
+        background: transparent;
+      }
+
+      .mobile-tab:hover {
+        background: #eef4f8;
+      }
+
+      .mobile-tab.active {
+        color: #ffffff;
+        background: #3498db;
+      }
+
+      .app {
+        display: block;
+        width: 100%;
+        height: calc(100dvh - 52px);
+        margin: 0;
+      }
+
+      .calculator-frame,
+      .assistant {
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        border-radius: 0;
+      }
+
+      .assistant {
+        grid-template-rows: auto auto minmax(180px, 1fr) auto auto;
+        overflow: auto;
+        padding: 14px;
       }
 
       .chat-log {
-        height: 240px;
+        height: auto;
+        min-height: 180px;
       }
 
+      .app[data-mobile-view="calculator"] .assistant {
+        display: none;
+      }
+
+      .app[data-mobile-view="assistant"] .calculator-frame {
+        display: none;
+      }
     }
   </style>
 </head>
 <body>
-  <main class="app">
+  <nav class="mobile-tabs" role="tablist" aria-label="功能导航">
+    <button class="mobile-tab active" role="tab" aria-selected="true" data-view="calculator" type="button">测量计算</button>
+    <button class="mobile-tab" role="tab" aria-selected="false" data-view="assistant" type="button">AI助手</button>
+  </nav>
+
+  <main class="app" id="app" data-mobile-view="calculator">
     <iframe
       id="calculatorFrame"
       class="calculator-frame"
@@ -190,17 +252,23 @@
 
   <script>
     const chatHistory = [];
+    const app = document.getElementById("app");
     const calculatorFrame = document.getElementById("calculatorFrame");
     const chatLog = document.getElementById("chatLog");
     const questionInput = document.getElementById("questionInput");
     const sendButton = document.getElementById("sendButton");
-    const AI_BACKEND_URL = "https://xn--11x61a012f.zeabur.app/api/chat";
-    const OCR_BACKEND_URL = AI_BACKEND_URL.replace(/\/api\/chat$/, "/api/ocr");
+    const API_BASE_URL = location.hostname.endsWith("github.io")
+      ? "https://xn--11x61a012f.zeabur.app"
+      : "";
+    const AI_BACKEND_URL = `${API_BASE_URL}/api/chat`;
+    const VISION_BACKEND_URL = `${API_BASE_URL}/api/vision-data`;
+    let selectedImageFile = null;
+    let selectedImageUrl = "";
 
     sendButton.addEventListener("click", sendQuestion);
-    calculatorFrame.addEventListener("load", setupCalculatorOcr);
+    calculatorFrame.addEventListener("load", setupVisionImport);
     if (calculatorFrame.contentDocument?.readyState === "complete") {
-      setupCalculatorOcr();
+      setupVisionImport();
     }
     document.getElementById("clearChatButton").addEventListener("click", () => {
       chatHistory.length = 0;
@@ -217,6 +285,19 @@
         sendQuestion();
       }
     });
+    document.querySelectorAll(".mobile-tab").forEach((tab) => {
+      tab.addEventListener("click", () => switchMobileView(tab.dataset.view));
+    });
+
+    function switchMobileView(view) {
+      if (!['calculator', 'assistant'].includes(view)) return;
+      app.dataset.mobileView = view;
+      document.querySelectorAll('.mobile-tab').forEach((tab) => {
+        const active = tab.dataset.view === view;
+        tab.classList.toggle('active', active);
+        tab.setAttribute('aria-selected', String(active));
+      });
+    }
 
     function collectCalculatorContext() {
       try {
@@ -242,56 +323,77 @@
       input.dispatchEvent(new InputEvent("input", { bubbles: true }));
     }
 
-    function getCalculatorOcrControls() {
+    function getVisionControls() {
       const doc = calculatorFrame.contentDocument;
       return {
-        imageInput: doc?.getElementById("ocrImageInput"),
-        button: doc?.getElementById("ocrButton"),
-        status: doc?.getElementById("ocrStatus"),
+        cameraInput: doc?.getElementById("cameraInput"),
+        imageFileInput: doc?.getElementById("imageFileInput"),
+        preview: doc?.getElementById("imagePreview"),
+        previewWrap: doc?.getElementById("imagePreviewWrap"),
+        fileName: doc?.getElementById("imageFileName"),
+        visionButton: doc?.getElementById("visionButton"),
+        status: doc?.getElementById("visionStatus"),
       };
     }
 
-    function setOcrStatus(status, message, state = "") {
+    function setVisionStatus(status, message, state = "") {
       if (!status) return;
       status.textContent = message;
-      status.className = `ocr-status${state ? ` ${state}` : ""}`;
+      status.className = `vision-status${state ? ` ${state}` : ""}`;
     }
 
-    function setupCalculatorOcr() {
-      const { button } = getCalculatorOcrControls();
-      if (!button || button.dataset.ocrBound === "true") return;
-      button.dataset.ocrBound = "true";
-      button.addEventListener("click", runOcr);
+    function selectVisionImage(file) {
+      const { preview, previewWrap, fileName, visionButton, status } = getVisionControls();
+      if (!file || !preview || !previewWrap || !fileName || !visionButton) return;
+      selectedImageFile = file;
+      if (selectedImageUrl) URL.revokeObjectURL(selectedImageUrl);
+      selectedImageUrl = URL.createObjectURL(file);
+      preview.src = selectedImageUrl;
+      fileName.textContent = file.name || "现场拍摄照片";
+      previewWrap.hidden = false;
+      visionButton.disabled = false;
+      setVisionStatus(status, "图片已准备，可以开始 AI 识别。");
     }
 
-    async function runOcr() {
-      const { imageInput, button, status } = getCalculatorOcrControls();
-      const file = imageInput?.files?.[0];
-      if (!button || button.disabled) return;
-      if (!file) {
-        setOcrStatus(status, "请先选择一张实验数据图片。", "error");
-        return;
-      }
-      button.disabled = true;
+    function setupVisionImport() {
+      const controls = getVisionControls();
+      if (!controls.visionButton || controls.visionButton.dataset.bound === "true") return;
+      controls.visionButton.dataset.bound = "true";
+      controls.cameraInput?.addEventListener("change", () => {
+        selectVisionImage(controls.cameraInput.files?.[0]);
+      });
+      controls.imageFileInput?.addEventListener("change", () => {
+        selectVisionImage(controls.imageFileInput.files?.[0]);
+      });
+      controls.visionButton.addEventListener("click", runVision);
+    }
+
+    async function runVision() {
+      const { visionButton, status } = getVisionControls();
+      if (!selectedImageFile || !visionButton || visionButton.disabled) return;
+      visionButton.disabled = true;
       try {
-        setOcrStatus(status, "正在识别图片并由 AI 整理实验数据...");
+        setVisionStatus(status, "正在由豆包视觉模型读取实验数据...");
         const formData = new FormData();
-        formData.append("image", file);
-        const response = await fetch(OCR_BACKEND_URL, {
+        formData.append("image", selectedImageFile);
+        const response = await fetch(VISION_BACKEND_URL, {
           method: "POST",
           body: formData,
         });
         const data = await response.json();
         if (!response.ok || !data.ok) {
-          throw new Error(data.message || "OCR 识别失败");
+          throw new Error(data.message || "AI 图片识别失败");
         }
         fillCalculatorData(data.data_text);
-        const rowCount = data.data_text.split(/\r?\n/).filter((line) => line.trim()).length;
-        setOcrStatus(status, `已识别并填入 ${rowCount} 组数据，请核对后手动开始计算。`, "success");
+        setVisionStatus(
+          status,
+          `已填入 ${data.rows.length} 组数据，请核对后手动计算。`,
+          "success"
+        );
       } catch (error) {
-        setOcrStatus(status, error.message, "error");
+        setVisionStatus(status, error.message, "error");
       } finally {
-        button.disabled = false;
+        visionButton.disabled = false;
       }
     }
 
