@@ -4,6 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>牛顿环曲率半径计算与AI回答助手</title>
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [["\\(", "\\)"]],
+        displayMath: [["\\[", "\\]"]],
+        processEscapes: true,
+      },
+      svg: {
+        fontCache: "global",
+      },
+      startup: {
+        typeset: false,
+      },
+    };
+  </script>
+  <script id="mathJaxScript" defer src="assets/mathjax/tex-svg.js"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -130,6 +146,17 @@
       color: #a8261f;
       border-color: #f0b5ae;
       background: #fff7f6;
+    }
+
+    .bubble mjx-container {
+      max-width: 100%;
+      white-space: normal;
+    }
+
+    .bubble mjx-container[display="true"] {
+      margin: 0.7em 0;
+      overflow-x: auto;
+      overflow-y: hidden;
     }
 
     textarea {
@@ -288,6 +315,9 @@
     document.querySelectorAll(".mobile-tab").forEach((tab) => {
       tab.addEventListener("click", () => switchMobileView(tab.dataset.view));
     });
+    document.getElementById("mathJaxScript")?.addEventListener("load", () => {
+      document.querySelectorAll(".bubble.assistant").forEach(renderAssistantMath);
+    });
 
     function switchMobileView(view) {
       if (!['calculator', 'assistant'].includes(view)) return;
@@ -437,6 +467,7 @@
         const answer = data.answer || "";
         if (!answer) throw new Error("DeepSeek 没有返回有效回答。");
         loadingBubble.textContent = answer;
+        await renderAssistantMath(loadingBubble);
         chatHistory.push({ role: "assistant", content: answer });
       } catch (error) {
         if (chatLog.lastElementChild?.textContent === "正在思考...") {
@@ -454,6 +485,17 @@
       bubble.textContent = text;
       chatLog.appendChild(bubble);
       chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    async function renderAssistantMath(bubble) {
+      if (!bubble || !window.MathJax?.typesetPromise) return;
+      try {
+        await MathJax.startup.promise;
+        MathJax.typesetClear?.([bubble]);
+        await MathJax.typesetPromise([bubble]);
+      } catch (error) {
+        console.warn("数学公式渲染失败", error);
+      }
     }
   </script>
 </body>
