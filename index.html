@@ -199,6 +199,9 @@
 
     sendButton.addEventListener("click", sendQuestion);
     calculatorFrame.addEventListener("load", setupCalculatorOcr);
+    if (calculatorFrame.contentDocument?.readyState === "complete") {
+      setupCalculatorOcr();
+    }
     document.getElementById("clearChatButton").addEventListener("click", () => {
       chatHistory.length = 0;
       chatLog.innerHTML = '<div class="bubble assistant">对话已清空。你可以继续提问。</div>';
