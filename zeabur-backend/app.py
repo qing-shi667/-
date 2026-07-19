@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import base64
 import json
+import math
 import os
 import re
 import tempfile
@@ -20,6 +22,156 @@ DEEPSEEK_API_URL = os.environ.get(
 DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash")
 ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
 OCR_LANG = os.environ.get("OCR_LANG", "eng+chi_sim")
+ARK_API_URL = os.environ.get(
+    "ARK_API_URL",
+    "https://ark.cn-beijing.volces.com/api/v3/responses",
+)
+ARK_VISION_MODEL = os.environ.get(
+    "ARK_VISION_MODEL",
+    "doubao-seed-2-0-pro-260215",
+)
+MAX_IMAGE_BYTES = int(os.environ.get("MAX_IMAGE_BYTES", str(12 * 1024 * 1024)))
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
+VISION_PROMPT = """读取牛顿环实验数据表，只提取环级数 k 和暗环直径 d(mm)。
+只输出 JSON：{"rows":[{"k":10,"d":7.02}],"warnings":[]}。
+k 必须是整数，d 必须是正数。不要猜测模糊数字；不确定的行写入 warnings，不要放进 rows。"""
+
+
+def build_ark_vision_payload(image_bytes: bytes, mime_type: str) -> dict[str, Any]:
+    encoded = base64.b64encode(image_bytes).decode("ascii")
+    return {
+        "model": ARK_VISION_MODEL,
+        "input": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_image",
+                        "image_url": f"data:{mime_type};base64,{encoded}",
+                    },
+                    {"type": "input_text", "text": VISION_PROMPT},
+                ],
+            }
+        ],
+    }
+
+
+def extract_ark_output_text(data: dict[str, Any]) -> str:
+    if isinstance(data.get("output_text"), str):
+        return data["output_text"]
+    texts: list[str] = []
+    for item in data.get("output", []):
+        if not isinstance(item, dict):
+            continue
+        for content in item.get("content", []):
+            if not isinstance(content, dict):
+                continue
+            if content.get("type") == "output_text" and isinstance(content.get("text"), str):
+                texts.append(content["text"])
+    return "\n".join(texts)
+
+
+def validate_vision_rows(parsed: dict[str, Any]) -> dict[str, Any]:
+    measurements: dict[int, float] = {}
+    for row in parsed.get("rows", []):
+        if not isinstance(row, dict):
+            continue
+        try:
+            k_float = float(row.get("k"))
+            diameter = float(row.get("d"))
+        except (TypeError, ValueError):
+            continue
+        if (
+            not math.isfinite(k_float)
+            or not k_float.is_integer()
+            or not math.isfinite(diameter)
+            or diameter <= 0
+        ):
+            continue
+        measurements[int(k_float)] = diameter
+    if len(measurements) < 3:
+        raise ValueError("至少识别出 3 组有效的 k、d 数据，请重新拍摄清晰照片。")
+    rows = [{"k": k, "d": measurements[k]} for k in sorted(measurements)]
+    data_text = "\n".join(f"{row['k']} {row['d']:g}" for row in rows)
+    warnings = parsed.get("warnings", [])
+    return {
+        "rows": rows,
+        "data_text": data_text,
+        "warnings": warnings if isinstance(warnings, list) else [],
+    }
+
+
+def call_ark_vision(image_bytes: bytes, mime_type: str) -> dict[str, Any]:
+    api_key = os.environ.get("ARK_API_KEY", "").strip()
+    if not api_key:
+        return {
+            "ok": False,
+            "error": "missing_ark_api_key",
+            "message": "Zeabur 后端未配置 ARK_API_KEY。",
+        }
+    payload = build_ark_vision_payload(image_bytes, mime_type)
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = request.Request(
+        ARK_API_URL,
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with request.urlopen(req, timeout=90) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": "ark_request_failed",
+            "message": str(exc),
+        }
+    text = extract_ark_output_text(data)
+    if not text:
+        return {
+            "ok": False,
+            "error": "unexpected_ark_response",
+            "message": "豆包视觉模型没有返回文字结果。",
+        }
+    try:
+        match = re.search(r"\{[\s\S]*\}", text)
+        if not match:
+            raise ValueError("豆包视觉模型没有返回 JSON。")
+        parsed = json.loads(match.group(0))
+        validated = validate_vision_rows(parsed)
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": "vision_data_invalid",
+            "message": str(exc),
+        }
+    return {"ok": True, **validated, "model": ARK_VISION_MODEL}
+
+
+def run_vision_data(image_bytes: bytes, mime_type: str) -> dict[str, Any]:
+    if mime_type not in ALLOWED_IMAGE_TYPES:
+        return {
+            "ok": False,
+            "error": "unsupported_image_type",
+            "message": "只支持 JPG、PNG 或 WebP 图片。",
+        }
+    if not image_bytes:
+        return {
+            "ok": False,
+            "error": "empty_image",
+            "message": "请选择或拍摄图片。",
+        }
+    if len(image_bytes) > MAX_IMAGE_BYTES:
+        return {
+            "ok": False,
+            "error": "image_too_large",
+            "message": "图片不能超过 12 MB。",
+        }
+    return call_ark_vision(image_bytes, mime_type)
 
 
 def build_messages(
@@ -200,7 +352,7 @@ def run_ocr(image_bytes: bytes) -> dict[str, Any]:
     return normalize_ocr_data(text)
 
 
-def extract_multipart_file(body: bytes, content_type: str) -> bytes:
+def extract_multipart_file(body: bytes, content_type: str) -> tuple[bytes, str]:
     match = re.search(r"boundary=([^;]+)", content_type)
     if not match:
         raise ValueError("缺少 multipart boundary。")
@@ -211,8 +363,15 @@ def extract_multipart_file(body: bytes, content_type: str) -> bytes:
         header_end = part.find(b"\r\n\r\n")
         if header_end < 0:
             continue
+        headers = part[:header_end].decode("utf-8", errors="replace")
+        mime_match = re.search(r"Content-Type:\s*([^\r\n]+)", headers, re.I)
+        mime_type = (
+            mime_match.group(1).strip().lower()
+            if mime_match
+            else "application/octet-stream"
+        )
         file_bytes = part[header_end + 4 :]
-        return file_bytes.rstrip(b"\r\n-")
+        return file_bytes.rstrip(b"\r\n-"), mime_type
     raise ValueError("没有找到上传图片。")
 
 
@@ -269,19 +428,28 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(result, 200 if result.get("ok") else 400)
             return
 
-        if path == "/api/ocr":
-            content_type = self.headers.get("Content-Type", "")
+        if path == "/api/vision-data":
             try:
-                if content_type.startswith("application/json"):
-                    payload = json.loads(body.decode("utf-8"))
-                    result = normalize_ocr_data(str(payload.get("ocr_text", "")))
-                else:
-                    image_bytes = extract_multipart_file(body, content_type)
-                    result = run_ocr(image_bytes)
+                image_bytes, mime_type = extract_multipart_file(
+                    body,
+                    self.headers.get("Content-Type", ""),
+                )
+                result = run_vision_data(image_bytes, mime_type)
             except Exception as exc:
                 self.send_json({"ok": False, "error": "bad_request", "message": str(exc)}, 400)
                 return
             self.send_json(result, 200 if result.get("ok") else 400)
+            return
+
+        if path == "/api/ocr":
+            self.send_json(
+                {
+                    "ok": False,
+                    "error": "ocr_removed",
+                    "message": "请升级前端并使用 AI 视觉识别。",
+                },
+                410,
+            )
             return
 
         self.send_error(404)
