@@ -21,11 +21,12 @@ class MathRenderingTests(unittest.TestCase):
     def test_frontend_renders_ai_latex_with_local_mathjax(self):
         html = (ROOT / "index.html").read_text(encoding="utf-8")
         self.assertIn('src="assets/mathjax/tex-svg.js"', html)
-        self.assertIn('src="assets/assistant-renderer.js"', html)
+        self.assertIn("assets/assistant-renderer.js", html)
         self.assertNotIn("cdn.jsdelivr", html)
         self.assertIn("function renderAssistantMath", html)
         self.assertIn("MathJax.typesetPromise([bubble])", html)
-        self.assertIn("AssistantRenderer.render", html)
+        self.assertIn("function renderAssistantAnswer", html)
+        self.assertIn("window.AssistantRenderer?.render", html)
 
     def test_assistant_panel_styles_do_not_apply_to_message_bubbles(self):
         html = (ROOT / "index.html").read_text(encoding="utf-8")

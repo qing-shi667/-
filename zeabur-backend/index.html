@@ -20,7 +20,7 @@
     };
   </script>
   <script id="mathJaxScript" defer src="assets/mathjax/tex-svg.js"></script>
-  <script defer src="assets/assistant-renderer.js"></script>
+  <script defer src="assets/assistant-renderer.js?v=20260720-1"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -28,9 +28,108 @@
 
     body {
       margin: 0;
-      color: #243142;
-      background: #eef3f8;
+      color: #24292f;
+      background: #f6f8fa;
       font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    }
+
+    .page-header {
+      border-bottom: 1px solid #d8dee8;
+      background: #ffffff;
+    }
+
+    .page-header-inner {
+      width: min(1420px, calc(100vw - 28px));
+      margin: 0 auto;
+      padding: 18px 0 0;
+    }
+
+    .page-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding-bottom: 14px;
+    }
+
+    .page-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      margin: 0;
+      color: #1f2328;
+      font-size: 24px;
+      line-height: 1.25;
+    }
+
+    .page-mark {
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      color: #ffffff;
+      background: #0969da;
+      font-weight: 700;
+    }
+
+    .page-badge {
+      flex: 0 0 auto;
+      padding: 2px 8px;
+      border: 1px solid #d8dee8;
+      border-radius: 999px;
+      color: #57606a;
+      background: #ffffff;
+      font-size: 13px;
+      font-weight: 400;
+    }
+
+    .page-tools {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .tool-chip {
+      padding: 7px 10px;
+      border: 1px solid #d8dee8;
+      border-radius: 6px;
+      color: #57606a;
+      background: #f6f8fa;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    .page-tabs {
+      display: flex;
+      gap: 22px;
+      min-height: 46px;
+      align-items: flex-end;
+    }
+
+    .page-tab {
+      position: relative;
+      padding: 0 0 12px;
+      color: #57606a;
+      font-weight: 600;
+    }
+
+    .page-tab.active {
+      color: #1f2328;
+    }
+
+    .page-tab.active::after {
+      position: absolute;
+      right: 0;
+      bottom: -1px;
+      left: 0;
+      height: 2px;
+      border-radius: 999px;
+      background: #fd8c73;
+      content: "";
     }
 
     .mobile-tabs {
@@ -39,10 +138,10 @@
 
     .app {
       width: min(1420px, calc(100vw - 28px));
-      margin: 14px auto;
+      margin: 16px auto;
       display: grid;
-      grid-template-columns: minmax(640px, 1fr) 390px;
-      gap: 14px;
+      grid-template-columns: minmax(660px, 1fr) 390px;
+      gap: 16px;
       align-items: start;
     }
 
@@ -51,9 +150,9 @@
       height: calc(100vh - 28px);
       min-height: 880px;
       border: 0;
-      border-radius: 8px;
+      border: 1px solid #d8dee8;
+      border-radius: 6px;
       background: #f5f7fa;
-      box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
     }
 
     .app > .assistant {
@@ -62,15 +161,14 @@
       gap: 12px;
       padding: 18px;
       border: 1px solid #d9e1ec;
-      border-radius: 8px;
+      border-radius: 6px;
       background: #ffffff;
-      box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
     }
 
     h1 {
       margin: 0;
-      color: #2c3e50;
-      font-size: 22px;
+      color: #1f2328;
+      font-size: 21px;
       line-height: 1.35;
     }
 
@@ -83,26 +181,27 @@
     button {
       padding: 10px 12px;
       border: 0;
-      border-radius: 5px;
+      border-radius: 6px;
       color: #ffffff;
-      background: #3498db;
+      background: #0969da;
       font: inherit;
       cursor: pointer;
-      transition: background 0.3s;
+      transition: background 0.2s, border-color 0.2s;
     }
 
     button:hover {
-      background: #2980b9;
+      background: #0759b8;
     }
 
     button.secondary {
-      color: #34495e;
-      border: 1px solid #d8dee8;
-      background: #ffffff;
+      color: #24292f;
+      border: 1px solid #d0d7de;
+      background: #f6f8fa;
     }
 
     button.secondary:hover {
-      background: #f1f5f9;
+      border-color: #afb8c1;
+      background: #eef2f6;
     }
 
     button:disabled {
@@ -118,14 +217,14 @@
       gap: 10px;
       padding: 12px;
       border: 1px solid #d8dee8;
-      border-radius: 8px;
-      background: #f8fbfe;
+      border-radius: 6px;
+      background: #ffffff;
     }
 
     .bubble {
       max-width: 94%;
       padding: 10px 12px;
-      border-radius: 8px;
+      border-radius: 6px;
       line-height: 1.65;
       white-space: pre-wrap;
       word-break: break-word;
@@ -140,7 +239,7 @@
     .bubble.assistant {
       justify-self: start;
       border: 1px solid #d8dee8;
-      background: #ffffff;
+      background: #f6f8fa;
       white-space: normal;
     }
 
@@ -197,7 +296,7 @@
       resize: vertical;
       padding: 10px;
       border: 1px solid #d8dee8;
-      border-radius: 5px;
+      border-radius: 6px;
       font: inherit;
       line-height: 1.55;
     }
@@ -211,6 +310,10 @@
     @media (max-width: 1050px) {
       body {
         overflow: hidden;
+      }
+
+      .page-header {
+        display: none;
       }
 
       .mobile-tabs {
@@ -257,14 +360,54 @@
       }
 
       .app > .assistant {
-        grid-template-rows: auto auto minmax(180px, 1fr) auto auto;
-        overflow: auto;
-        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        overflow: hidden;
+        padding: 12px;
+      }
+
+      h1 {
+        font-size: 22px;
+      }
+
+      .quick {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .quick button {
+        min-width: 0;
+        padding: 9px 6px;
       }
 
       .chat-log {
+        flex: 1 1 auto;
         height: auto;
-        min-height: 180px;
+        min-height: 0;
+        padding: 10px;
+        overflow-y: auto;
+      }
+
+      .bubble {
+        max-width: 100%;
+        padding: 10px;
+      }
+
+      textarea {
+        min-height: 92px;
+        max-height: 150px;
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .actions button {
+        min-width: 0;
+        min-height: 46px;
       }
 
       .app[data-mobile-view="calculator"] > .assistant {
@@ -278,6 +421,28 @@
   </style>
 </head>
 <body>
+  <header class="page-header">
+    <div class="page-header-inner">
+      <div class="page-title-row">
+        <h1 class="page-title">
+          <span class="page-mark">N</span>
+          牛顿环曲率半径计算与AI回答助手
+          <span class="page-badge">实验工具</span>
+        </h1>
+        <div class="page-tools" aria-label="功能状态">
+          <span class="tool-chip">视觉识别</span>
+          <span class="tool-chip">数据计算</span>
+          <span class="tool-chip">AI问答</span>
+        </div>
+      </div>
+      <div class="page-tabs" aria-label="页面区域">
+        <span class="page-tab active">测量计算</span>
+        <span class="page-tab">AI助手</span>
+        <span class="page-tab">实验数据</span>
+      </div>
+    </div>
+  </header>
+
   <nav class="mobile-tabs" role="tablist" aria-label="功能导航">
     <button class="mobile-tab active" role="tab" aria-selected="true" data-view="calculator" type="button">测量计算</button>
     <button class="mobile-tab" role="tab" aria-selected="false" data-view="assistant" type="button">AI助手</button>
@@ -498,7 +663,7 @@
         }
         const answer = data.answer || "";
         if (!answer) throw new Error("DeepSeek 没有返回有效回答。");
-        AssistantRenderer.render(loadingBubble, answer);
+        renderAssistantAnswer(loadingBubble, answer);
         await renderAssistantMath(loadingBubble);
         chatHistory.push({ role: "assistant", content: answer });
       } catch (error) {
@@ -517,6 +682,14 @@
       bubble.textContent = text;
       chatLog.appendChild(bubble);
       chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    function renderAssistantAnswer(bubble, answer) {
+      if (window.AssistantRenderer?.render) {
+        window.AssistantRenderer.render(bubble, answer);
+        return;
+      }
+      bubble.textContent = answer;
     }
 
     async function renderAssistantMath(bubble) {
