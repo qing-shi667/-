@@ -21,9 +21,17 @@ class MathRenderingTests(unittest.TestCase):
     def test_frontend_renders_ai_latex_with_local_mathjax(self):
         html = (ROOT / "index.html").read_text(encoding="utf-8")
         self.assertIn('src="assets/mathjax/tex-svg.js"', html)
+        self.assertIn('src="assets/assistant-renderer.js"', html)
         self.assertNotIn("cdn.jsdelivr", html)
         self.assertIn("function renderAssistantMath", html)
         self.assertIn("MathJax.typesetPromise([bubble])", html)
+        self.assertIn("AssistantRenderer.render", html)
+
+    def test_assistant_panel_styles_do_not_apply_to_message_bubbles(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+        self.assertNotRegex(html, r"(?m)^\s*\.assistant\s*\{")
+        self.assertIn(".app > .assistant {", html)
+        self.assertIn(".calculator-frame,\n      .app > .assistant {", html)
 
     def test_backend_requires_consistent_latex_delimiters(self):
         backend = load_backend()
@@ -31,6 +39,7 @@ class MathRenderingTests(unittest.TestCase):
         self.assertIn("行内公式", prompt)
         self.assertIn(r"\(", prompt)
         self.assertIn(r"\[", prompt)
+        self.assertIn("不要把单个变量单独成段", prompt)
 
     def test_mathjax_is_available_in_static_and_embedded_modes(self):
         backend = load_backend()

@@ -25,6 +25,11 @@ STATIC_FILES = [
         "assets/mathjax/tex-svg.js",
         "text/javascript; charset=utf-8",
     ),
+    (
+        "/assets/assistant-renderer.js",
+        "assets/assistant-renderer.js",
+        "text/javascript; charset=utf-8",
+    ),
 ]
 
 

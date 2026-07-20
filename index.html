@@ -20,6 +20,7 @@
     };
   </script>
   <script id="mathJaxScript" defer src="assets/mathjax/tex-svg.js"></script>
+  <script defer src="assets/assistant-renderer.js"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -55,7 +56,7 @@
       box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
     }
 
-    .assistant {
+    .app > .assistant {
       display: grid;
       grid-template-rows: auto auto 280px auto auto;
       gap: 12px;
@@ -140,6 +141,7 @@
       justify-self: start;
       border: 1px solid #d8dee8;
       background: #ffffff;
+      white-space: normal;
     }
 
     .bubble.error {
@@ -154,9 +156,39 @@
     }
 
     .bubble mjx-container[display="true"] {
-      margin: 0.7em 0;
+      margin: 0.4em 0;
       overflow-x: auto;
       overflow-y: hidden;
+    }
+
+    .message-paragraph {
+      margin: 0;
+    }
+
+    .message-paragraph + .message-paragraph,
+    .message-list + .message-paragraph,
+    .message-math + .message-paragraph {
+      margin-top: 0.55em;
+    }
+
+    .message-list {
+      margin: 0.45em 0;
+      padding-left: 1.35em;
+    }
+
+    .message-list li + li {
+      margin-top: 0.3em;
+    }
+
+    .message-math {
+      margin: 0.45em 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      text-align: center;
+    }
+
+    .message-math mjx-container[display="true"] {
+      margin: 0;
     }
 
     textarea {
@@ -217,14 +249,14 @@
       }
 
       .calculator-frame,
-      .assistant {
+      .app > .assistant {
         width: 100%;
         height: 100%;
         min-height: 0;
         border-radius: 0;
       }
 
-      .assistant {
+      .app > .assistant {
         grid-template-rows: auto auto minmax(180px, 1fr) auto auto;
         overflow: auto;
         padding: 14px;
@@ -235,7 +267,7 @@
         min-height: 180px;
       }
 
-      .app[data-mobile-view="calculator"] .assistant {
+      .app[data-mobile-view="calculator"] > .assistant {
         display: none;
       }
 
@@ -466,7 +498,7 @@
         }
         const answer = data.answer || "";
         if (!answer) throw new Error("DeepSeek 没有返回有效回答。");
-        loadingBubble.textContent = answer;
+        AssistantRenderer.render(loadingBubble, answer);
         await renderAssistantMath(loadingBubble);
         chatHistory.push({ role: "assistant", content: answer });
       } catch (error) {
